@@ -1,0 +1,239 @@
+#!/usr/bin/python
+
+import sys
+
+
+# most commonly used letters in the English alphabet, from most common to least common
+# retrieved from http://listafterlist.com/most-common-letters-in-the-alphabet-used-in-the-english-language/
+common_letters = list(["e","a","r","i","o","t","n","s","l","c","u","d","p","m","h","g","b","f","y","w","k","v","x","z","j","q"])
+alphabet = set(["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"])
+
+
+# sub_cipher is a program for cracking, encrypting, and decrypting text with a simple substitution cipher
+# 
+# sub_cipher can be used in three ways
+# Case 1) ./sub_cipher mapping_file text_file
+#       encrypts or decrypts textfile according to mapping
+#       mapping file format (one mapping per line): 'original_letter:new_letter'
+# Case 2) ./sub_cipher ciphertext_file
+#       attempts to crack ciphertext with letter frequency analysis
+#       most common letter in ciphertext is replaced with most common letter in english, and so on
+# Case 3) ./sub_cipher -m text_file
+#       manually create and view mappings for text_file
+def Main():
+
+    # no arguments: print use cases and exit
+    if len(sys.argv) <= 1:
+        print("USAGE: ./sub_cipher    mapping_file    text_file\n\tencrypt plaintext or decrypt ciphertext with mapping")
+        print("\n                     OR                           ")
+        print("\nUSAGE: ./sub_cipher    ciphertext_file\n\tautocrack ciphertext with letter frequency analysis")
+        print("\n                     OR                           ")
+        print("\nUSAGE: ./sub_cipher     -m    text_file\n\tmanually create and view mappings")
+        print("\nmapping file format (one mapping per line):'orignal_letter:new_letter'")
+        exit(1)
+
+    # Case 2 - single argument = ciphertext. autocrack with letter frequency analysis
+    elif len(sys.argv) is 2:
+        try:
+            cipher_file = open(sys.argv[1], 'r')
+        except IOError:
+            print("Error: Could not open file. Check filepath?")
+            exit(2)
+        cipher_list = list(cipher_file.read().lower().split())
+        cipher = ""
+        # cipher is always a string with all lowecase letters
+        for w in cipher_list:
+            cipher+= w + " "
+        message = autocrack(cipher)
+        print(message)
+        cipher_file.close()
+        exit(0)
+
+    # Case 3 - manually edit ciphertext. contains a menu for user to choose actions
+    elif str(sys.argv[1]) == "-m":
+        try:
+            cipher_file = open(sys.argv[2], 'r')
+        except IOError:
+            print("Error: Could not open file. Check filepath?")
+            exit(2)
+        cipher_list = list(cipher_file.read().lower().split())
+        cipher = ""
+        for w in cipher_list:
+            cipher+= w + " "
+        mappings = set()
+
+        while True:
+            print("(p)rint current ciphertext\n(l)etter frequency analysis (of current ciphertext)\n(n)ew mapping")
+            print("(v)iew mappings\n(r)eset mappings\n(a)utocrack (make sure to use original ciphertext)\n(q)uit")
+            cmd = raw_input()
+
+            # print current ciphertext
+            if cmd is "p":
+                print("\n")
+                print(cipher)
+                print("\n")
+
+            # print most common letters (in order of most to least common)
+            elif cmd is "l":
+                let_count = letter_count(cipher)
+                print("")
+                for val in let_count:
+                    print(val)
+                print("\nMost common letters in English (most common to least common):")
+                print(common_letters)
+                print("")
+
+            # create new letter mapping (replace all x's with y's)
+            elif cmd is "n":
+                print("\nreplace 'x' with 'y'")
+                x = raw_input("x = ")
+                y = raw_input("y = ")
+                print("")
+                m = x + ":" + y
+                mappings.add(m)
+                cipher = switch_letter(cipher, m)
+
+            # print all current mappings
+            elif cmd is "v":
+                print("\noriginal_letter:new_letter")
+                for mapping in mappings:
+                    print(mapping)
+                print("")
+
+            # resets to original ciphertext
+            elif cmd is "r":
+                cipher_file.seek(0)
+                cipher_list = list(cipher_file.read().lower().split())
+                cipher = ""
+                for w in cipher_list:
+                    cipher+= w + " "
+                mappings = set()
+                print("")
+
+            # autocrack ciphertext and exit. should be original ciphertext (no custom mappings)
+            elif cmd is "a":
+                message = autocrack(cipher)
+                print("")
+                print(message)
+                cipher_file.close()
+                exit(0)
+
+            # exit program
+            elif cmd is "q":
+                cipher_file.close()
+                exit(0)
+
+            else:
+                print("\n" + cmd + " is not a valid command\n")
+        # end while loop
+
+    # Case 1: given mapping and message as arguments, applies mapping to message
+    elif len(sys.argv) is 3:
+        try:
+            mappings_file = open(sys.argv[1], 'r')
+            message_file = open(sys.argv[2], 'r')
+        except IOError:
+            print("Error: Could not open file. Check filepath?")
+            exit(2)
+        mappings = set()
+        mappings_list = list(mappings_file.read().lower().split())
+        for line in mappings_list:
+            mappings.add(line)
+        message_list = list(message_file.read().lower().split())
+        message = ""
+        for w in message_list:
+            message+=w + " "
+        ciphertext = map_mappings(mappings, message)
+        print(ciphertext)
+        mappings_file.close()
+        message_file.close()
+        exit(0)
+
+    else:
+        print("Wrong number of arguments")
+        exit(1)
+
+
+# Automatically cracks ciphertext based on letter frequency analysis. Most common letter is replaced with the
+#   most commonly used letter in english, second most common with second most commonly used, and so on ...
+#
+# @cipher ciphertext to autocrack
+# @return cracked ciphertext  
+def autocrack(cipher):
+    let_freq = letter_count(cipher)
+    let_count = 0
+    for letter in cipher:
+        for i in range(0, len(alphabet)):
+            if letter is let_freq[i][0]:
+                cipher = cipher[0:let_count] + common_letters[i] + cipher[let_count+1:len(cipher)]
+        let_count+=1
+    return cipher
+
+
+# Maps each mapping onto the message to en/de-crypt
+#
+# @param mappings set of letter mappings in form "old:new"
+# @param message text to apply mappings to
+# @return ciphertext text with all mappings applied
+def map_mappings(mappings, message):
+    ciphertext = ""
+    for letter in message:
+        if letter in alphabet:
+            for mapping in mappings:
+                if letter is mapping[0]:
+                    ciphertext+=mapping[2]
+        else:
+            ciphertext+=letter
+    return ciphertext
+
+
+
+# Counts the frequency of every letter in the ciphertext
+#
+# @param cipher the text to analyze
+# @return list of (character, frequency) tuples
+def letter_count(cipher):
+    let_count = list()
+    for letter in alphabet:
+        count = 0
+        for char in cipher:
+            if char is letter:
+                count+=1
+        let_count.append((letter, count))
+    let_count = freq_sort(let_count)
+    return let_count
+
+
+# Sorts list of (character, frequency) tuples from highest to lowest frequency
+#
+# @param lc list of (character, frequency) tuples
+# @return sorted list of tuples
+def freq_sort(lc):
+    for i in range(1, len(lc)):                                      # ciphertext should not be large
+        tempval = lc[i][1]                                           # so insertion sort is fine
+        temp = lc[i]
+        j = i -1
+        while j >=0 and lc[j][1] < tempval:
+            lc[j + 1] = lc[j]
+            j-= 1
+        lc[j + 1] = temp
+    return lc
+
+
+# Switches every letters in cipher according to mapping
+# 
+# @param cipher text to switch letters in
+# @param mapping letters to switch, format: "old:new"
+# @return cipher with every old letter replaced with new letter
+def switch_letter(cipher, mapping):
+    olet = mapping[0]
+    nlet = mapping[2]
+    for i in range(0, len(cipher)):
+        if cipher[i] is olet:
+            nword = cipher[0:i] + nlet + cipher[i+1:len(cipher)]
+            cipher = nword                                           # must replace cipher each time
+    return cipher                                                    # because strings are immutable
+
+
+if __name__ == '__main__':
+    Main()
